@@ -1,4 +1,5 @@
 import { build } from 'esbuild';
+import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 const directory = fileURLToPath(new URL('../', import.meta.url));
@@ -21,7 +22,15 @@ for (const name of packages) {
   for (const filename of ['LICENSE', 'LICENSE.md', 'LICENSE.txt', 'LICENSE-MIT', 'license', 'license.md']) {
     try { license = await readFile(new URL(filename, base), 'utf8'); break; } catch (error) { if (error.code !== 'ENOENT') throw error; }
   }
-  if (!license && name === '@cfworker/json-schema') license = await readFile(new URL('./licenses/cfworker.txt', import.meta.url), 'utf8');
+  // The 4.1.1 npm tarball omits LICENSE.md; use the source commit recorded by npm.
+  if (!license && name === '@cfworker/json-schema' && manifest.version === '4.1.1') {
+    const response = await fetch('https://raw.githubusercontent.com/cfworker/cfworker/5409fdc2bd144f68e8b28c61c71fcb16600000a6/LICENSE.md', { signal: AbortSignal.timeout(15000) });
+    if (!response.ok) throw new Error(`License download failed: ${name}, HTTP ${response.status}`);
+    license = await response.text();
+    if (createHash('sha256').update(license).digest('hex') !== '376944252ab78ca6b41aee44ddea8894927ee67891e77e61eb9d59af63e35094') {
+      throw new Error(`License checksum mismatch: ${name}`);
+    }
+  }
   if (!license) throw new Error(`Missing license: ${name}`);
   licenses.push(`${name} ${manifest.version}\n${license}`);
 }
