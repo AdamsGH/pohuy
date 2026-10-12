@@ -1,0 +1,4 @@
+interface:
+  display_name: "Настройка Pohuy"
+  short_description: "Первоначальный выбор режима общения"
+  default_prompt: "Используй $setup, чтобы выбрать режим общения Pohuy."

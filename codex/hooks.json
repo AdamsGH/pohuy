@@ -6,10 +6,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${PLUGIN_ROOT}/codex/pohuy.py\" hook SessionStart",
+            "command": "node \"${PLUGIN_ROOT}/codex/dist/controller.mjs\" hook SessionStart",
             "timeout": 5,
-            "statusMessage": "Loading Pohuy chat style",
-            "additionalContextLimit": 8000
+            "statusMessage": "Загрузка режима Pohuy",
+            "additionalContextLimit": 8000,
+            "commandWindows": "node \"%PLUGIN_ROOT%/codex/dist/controller.mjs\" hook SessionStart"
           }
         ]
       }
@@ -19,10 +20,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${PLUGIN_ROOT}/codex/pohuy.py\" hook UserPromptSubmit",
+            "command": "node \"${PLUGIN_ROOT}/codex/dist/controller.mjs\" hook UserPromptSubmit",
             "timeout": 5,
-            "statusMessage": "Checking Pohuy chat style",
-            "additionalContextLimit": 8000
+            "statusMessage": "Проверка режима Pohuy",
+            "additionalContextLimit": 8000,
+            "commandWindows": "node \"%PLUGIN_ROOT%/codex/dist/controller.mjs\" hook UserPromptSubmit"
           }
         ]
       }
