@@ -1,8 +1,10 @@
 {
   "mcpServers": {
     "pohuy-settings": {
-      "command": "python3",
-      "args": ["settings_mcp.py"],
+      "command": "node",
+      "args": [
+        "dist/server.mjs"
+      ],
       "cwd": "./codex"
     }
   }

@@ -1,6 +1,6 @@
 {
   "name": "pohuy",
-  "version": "0.1.9",
+  "version": "0.2.0",
   "description": "Инженерный стиль общения на русском с сохранением режима и настройкой интенсивности.",
   "author": {
     "name": "Serge Shima",
@@ -13,7 +13,7 @@
   "hooks": "./codex/hooks.json",
   "extensions": {
     "com.openai": {
-      "onboardingSkill": "./codex/skills/pohuy/SKILL.md"
+      "onboardingSkill": "./codex/skills/setup/SKILL.md"
     }
   },
   "interface": {
