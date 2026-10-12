@@ -6,7 +6,7 @@
     "name": "Serge Shima",
     "url": "https://github.com/smixs"
   },
-  "repository": "https://github.com/smixs/pohuy",
+  "repository": "https://github.com/AdamsGH/pohuy",
   "license": "MIT",
   "skills": "./codex/skills/",
   "mcpServers": "./codex/mcp.json",
@@ -32,7 +32,7 @@
       "Покажи текущий режим Pohuy.",
       "Выключи стиль Pohuy."
     ],
-    "websiteURL": "https://github.com/smixs/pohuy",
+    "websiteURL": "https://github.com/AdamsGH/pohuy/tree/codex/pohuy-fork",
     "composerIcon": "./assets/icon.png",
     "logo": "./assets/icon.png"
   }
