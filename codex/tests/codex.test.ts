@@ -6,6 +6,7 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { setTimeout as delay } from 'node:timers/promises';
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const available = spawnSync('codex', ['--version']).status === 0;
@@ -65,10 +66,16 @@ test('Codex discovers compatibility hooks and onboarding from a clean installed 
   assert.equal(detail.onboardingSkill.name, 'pohuy:setup');
   assert.equal(detail.onboardingSkill.enabled, true);
   const thread = (await app.call('thread/start', { cwd: dir, ephemeral: true, config: { 'features.apps': false } })).thread.id;
-  const servers = await app.call('mcpServerStatus/list', { threadId: thread });
+  let servers = await app.call('mcpServerStatus/list', { threadId: thread });
+  const deadline = Date.now() + 5000;
+  while (servers.data.find((s: any) => s.name === 'pohuy-settings')?.runtimeStatus === 'starting' && Date.now() < deadline) {
+    await delay(100);
+    servers = await app.call('mcpServerStatus/list', { threadId: thread });
+  }
   assert.equal(servers.data.find((s: any) => s.name === 'pohuy-settings')?.runtimeStatus, 'connected', JSON.stringify(servers));
   const resultRead = await app.call('mcpServer/tool/call', { threadId: thread, server: 'pohuy-settings', tool: 'settings.read', arguments: {} });
-  assert.equal(resultRead.structuredContent.values.tier, 'full');
-  const update = await app.call('mcpServer/tool/call', { threadId: thread, server: 'pohuy-settings', tool: 'settings.update', arguments: { set: { tier: 'lite' } } });
-  assert.equal(update.structuredContent.values.tier, 'lite');
+  assert.equal(resultRead.structuredContent.values.mode, 'Обычный');
+  assert.equal(resultRead.structuredContent.layout.length, 3);
+  const update = await app.call('mcpServer/tool/call', { threadId: thread, server: 'pohuy-settings', tool: 'settings.update', arguments: { set: { mode: 'Лёгкий' } } });
+  assert.equal(update.structuredContent.values.mode, 'Лёгкий');
 });

@@ -22,7 +22,7 @@ try {
     else if (command === 'set') {
       const tier = value === 'normal' ? 'off' : value;
       if (!isTier(tier)) throw new Error('Допустимые режимы: off, lite, full, ultra.');
-      const context = styleContext(tier);
+      const context = styleContext(tier, undefined, { ...readSettings(directory), tier });
       result = { saved: true, tier: setTier(directory, tier).tier, context };
     } else throw new Error('Команды: status, set <режим>, hook <событие>, migrate [--apply].');
   }

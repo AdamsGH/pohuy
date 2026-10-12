@@ -6,7 +6,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { TIERS, readSettings, setTier, hook, promptTier, serverDataDirectory, dataDirectory, atomicWrite } from '../core.js';
+import { TIERS, readSettings, setTier, hook, promptTier, serverDataDirectory, dataDirectory, atomicWrite, updateSettings, styleContext, preferences } from '../core.js';
 import { migrate, removeBlocks, removeReminder } from '../migration.js';
 import { fileURLToPath } from 'node:url';
 import { unzipSync } from 'fflate';
@@ -76,27 +76,84 @@ test('real MCP advertises native settings, validates updates, and shares mode wi
   assert.ok(tools.find(t => t.name === 'settings.read')?.outputSchema);
   const first = await client.callTool({ name: 'settings.read', arguments: {} });
   const settings = first.structuredContent as any;
-  assert.deepEqual(settings.values, { tier: 'full' });
-  assert.deepEqual(settings.schema.properties.tier.enum, [...TIERS]);
-  assert.equal(settings.layout[0].items[0].property, 'tier');
+  assert.equal(settings.values.mode, 'Обычный');
+  assert.equal(settings.values.answerLength, 'Кратко');
+  assert.deepEqual(settings.schema.properties.mode.enum, ['Выключен', 'Лёгкий', 'Обычный', 'Интенсивный']);
+  assert.equal(settings.layout.length, 3);
+  assert.equal(settings.layout.flatMap((g: any) => g.items).some((item: any) => item.kind === 'tool'), false);
+  assert.equal(settings.layout[0].items[0].property, 'mode');
   assert.equal(existsSync(path.join(dir, 'settings.json')), false);
   for (const tier of TIERS) {
-    const update = await client.callTool({ name: 'settings.update', arguments: { set: { tier } } });
-    assert.equal((update.structuredContent as any).values.tier, tier);
+    const mode = { off: 'Выключен', lite: 'Лёгкий', full: 'Обычный', ultra: 'Интенсивный' }[tier];
+    const update = await client.callTool({ name: 'settings.update', arguments: { set: { mode } } });
+    assert.equal((update.structuredContent as any).values.mode, mode);
+    assert.equal(readSettings(dir).tier, tier);
     const context = await client.callTool({ name: 'pohuy.context', arguments: {} });
     assert.match((context.content as { text: string }[])[0].text, new RegExp(`Pohuy mode: ${tier}`));
     assert.match(hook('SessionStart', { hook_event_name: 'SessionStart', session_id: 'mcp' }, dir, ROOT).hookSpecificOutput.additionalContext, new RegExp(`Pohuy mode: ${tier}`));
   }
+  await client.callTool({ name: 'settings.update', arguments: { set: { answerLength: 'Подробно', dryHumor: false } } });
+  const changed = await client.callTool({ name: 'settings.update', arguments: { set: { mode: 'Лёгкий' } } });
+  assert.equal((changed.structuredContent as any).values.answerLength, 'Подробно');
+  assert.equal((changed.structuredContent as any).values.dryHumor, false);
+  const detailed = await client.callTool({ name: 'pohuy.context', arguments: {} });
+  assert.match((detailed.content as { text: string }[])[0].text, /Give thorough explanations/);
   const before = readFileSync(path.join(dir, 'settings.json'));
-  for (const args of [{ set: {} }, { set: { tier: 'invalid' } }, { set: { path: '/tmp/other' } }, { set: { tier: 'lite' }, data_dir: '/tmp/other' }]) {
+  for (const args of [{ set: {} }, { set: { mode: 'invalid' } }, { set: { path: '/tmp/other' } }, { set: { mode: 'Лёгкий' }, data_dir: '/tmp/other' }, { set: { autoApply: 'false' } }]) {
     const result = await client.callTool({ name: 'settings.update', arguments: args });
     assert.equal(result.isError, true);
     assert.deepEqual(readFileSync(path.join(dir, 'settings.json')), before);
   }
   writeFileSync(path.join(dir, 'settings.json'), '{broken');
   assert.equal((await client.callTool({ name: 'settings.read', arguments: {} })).isError, true);
-  assert.equal((await client.callTool({ name: 'settings.update', arguments: { set: { tier: 'full' } } })).isError, true);
+  assert.equal((await client.callTool({ name: 'settings.update', arguments: { set: { mode: 'Обычный' } } })).isError, true);
   assert.equal(readFileSync(path.join(dir, 'settings.json'), 'utf8'), '{broken');
+});
+
+test('partial preferences persist across mode changes and filter the context without editing sources', t => {
+  const dir = temp(); t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const source = path.join(ROOT, 'codex/AGENTS-pohuy.md'); const before = readFileSync(source);
+  writeFileSync(path.join(dir, 'settings.json'), '{"version":1,"tier":"full","retained":42}');
+  assert.deepEqual(preferences(readSettings(dir)), { autoApply: true, answerLength: 'short', dryHumor: true, workingDictionary: true, calibrationExamples: true, rhymingForms: true });
+  updateSettings(dir, { answerLength: 'detailed', dryHumor: false, workingDictionary: false, calibrationExamples: false, rhymingForms: false }, ROOT);
+  setTier(dir, 'ultra');
+  const settings = readSettings(dir);
+  assert.equal(settings.retained, 42);
+  assert.equal(settings.answerLength, 'detailed');
+  const context = styleContext(settings.tier, ROOT, settings);
+  assert.match(context, /Give thorough explanations/);
+  assert.match(context, /without jokes or sarcasm/);
+  assert.match(context, /Rhyming forms are disabled/);
+  for (const heading of ['## Краткость', '## Словарь', '## Хуенитивы', '## Примеры калибровки']) assert.equal(context.includes(heading), false);
+  assert.match(context, /## Auto-Clarity/);
+  assert.match(context, /professional and free of profanity/);
+  assert.deepEqual(readFileSync(source), before);
+});
+
+test('changing preferences without changing intensity rehydrates the next hook', t => {
+  const dir = temp(); t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const start = { hook_event_name: 'SessionStart', session_id: 'preferences' };
+  hook('SessionStart', start, dir, ROOT);
+  const prompt = { hook_event_name: 'UserPromptSubmit', session_id: 'preferences', prompt: 'Continue the task.' };
+  assert.equal(hook('UserPromptSubmit', prompt, dir, ROOT).hookSpecificOutput.additionalContext.includes('# Pohuy Style Active'), false);
+  updateSettings(dir, { answerLength: 'adaptive' }, ROOT);
+  const refreshed = hook('UserPromptSubmit', prompt, dir, ROOT).hookSpecificOutput.additionalContext;
+  assert.match(refreshed, /# Pohuy Style Active/);
+  assert.match(refreshed, /Match reply length to the task/);
+  assert.equal(readSettings(dir).tier, 'full');
+});
+
+test('manual activation keeps the saved profile and allows explicit commands; rhyming stays exclusive to ultra', t => {
+  const dir = temp(); t.after(() => rmSync(dir, { recursive: true, force: true }));
+  updateSettings(dir, { autoApply: false, rhymingForms: true }, ROOT);
+  const prompt = { hook_event_name: 'UserPromptSubmit', session_id: 'manual', prompt: 'Continue the task.' };
+  assert.match(hook('UserPromptSubmit', prompt, dir, ROOT).hookSpecificOutput.additionalContext, /Automatic Pohuy activation is disabled/);
+  assert.equal(readSettings(dir).tier, 'full');
+  assert.match(styleContext('full', ROOT, readSettings(dir)), /Rhyming forms are disabled/);
+  const explicit = hook('UserPromptSubmit', { ...prompt, prompt: '/pohuy ultra' }, dir, ROOT).hookSpecificOutput.additionalContext;
+  assert.match(explicit, /Rhyming forms are allowed in ultra mode/);
+  assert.equal(readSettings(dir).autoApply, false);
+  assert.match(hook('UserPromptSubmit', prompt, dir, ROOT).hookSpecificOutput.additionalContext, /Automatic Pohuy activation is disabled/);
 });
 
 test('migration previews without writes and removes only exact legacy content', t => {
