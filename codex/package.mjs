@@ -27,7 +27,13 @@ export function packagePlugin(destination, archive, compat = false) {
       mkdirSync(path.dirname(target), { recursive: true });
       cpSync(path.join(root, file), target);
     }
-    if (!compat) {
+    if (compat) {
+      cpSync(path.join(destination, 'codex/mcp.json'), path.join(destination, '.mcp.json'));
+      const overlayPath = path.join(destination, '.codex-plugin/plugin.json');
+      const overlay = JSON.parse(readFileSync(overlayPath, 'utf8'));
+      overlay.mcpServers = './.mcp.json';
+      writeFileSync(overlayPath, JSON.stringify(overlay, null, 2) + '\n');
+    } else {
       cpSync(path.join(destination, 'codex/skills/setup'), path.join(destination, 'skills/setup'), { recursive: true });
       cpSync(path.join(destination, 'codex/skills/pohuy'), path.join(destination, 'skills/pohuy'), { recursive: true });
       const overlayPath = path.join(destination, '.codex-plugin/plugin.json');
@@ -43,6 +49,7 @@ export function packagePlugin(destination, archive, compat = false) {
         const relative = `skills/${skill}/${name}`;
         files['pohuy/' + relative] = readFileSync(path.join(destination, relative));
       }
+      if (compat) files['pohuy/.mcp.json'] = readFileSync(path.join(destination, '.mcp.json'));
       writeFileSync(archive, zipSync(files), { flag: 'wx' });
     }
   } catch (error) { rmSync(destination, { recursive: true, force: true }); throw error; }
