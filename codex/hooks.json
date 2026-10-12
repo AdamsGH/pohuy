@@ -1,0 +1,31 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "^(startup|resume|clear|compact)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${PLUGIN_ROOT}/codex/pohuy.py\" hook SessionStart",
+            "timeout": 5,
+            "statusMessage": "Loading Pohuy chat style",
+            "additionalContextLimit": 8000
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${PLUGIN_ROOT}/codex/pohuy.py\" hook UserPromptSubmit",
+            "timeout": 5,
+            "statusMessage": "Checking Pohuy chat style",
+            "additionalContextLimit": 8000
+          }
+        ]
+      }
+    ]
+  }
+}

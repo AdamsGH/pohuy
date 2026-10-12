@@ -293,7 +293,11 @@ curl -fsSL https://raw.githubusercontent.com/smixs/pohuy/main/install.sh | bash
 
 ## Codex CLI
 
-Та же схема для OpenAI Codex CLI — одной командой:
+Нативный плагин для Codex: автоматическая загрузка стиля, сохранение режима
+между сессиями и миграция со старого установщика. Установка, доверие хукам
+и проверки описаны в [codex/README.md](./codex/README.md).
+
+Для установки через глобальный `AGENTS.md` остаётся прежний скрипт:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/smixs/pohuy/main/install-codex.sh | bash

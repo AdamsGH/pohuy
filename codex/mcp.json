@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "pohuy-settings": {
+      "command": "python3",
+      "args": ["settings_mcp.py"],
+      "cwd": "./codex"
+    }
+  }
+}

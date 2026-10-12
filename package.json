@@ -8,13 +8,27 @@
   },
   "scripts": {
     "test": "node --import tsx --test extensions/pohuy.test.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:codex": "python3 -m unittest discover -s codex/tests -p 'test_*.py' -v",
+    "test:codex:integration": "POHUY_CODEX_INTEGRATION=1 python3 -m unittest discover -s codex/tests -p test_codex_integration.py -v"
   },
   "keywords": [
     "pi-package"
   ],
   "files": [
     ".claude-plugin/",
+    ".codex-plugin/",
+    "assets/",
+    "codex/mcp.json",
+    ".agents/plugins/marketplace.json",
+    "codex/AGENTS-pohuy.md",
+    "codex/hooks.json",
+    "codex/pohuy.py",
+    "codex/settings_mcp.py",
+    "codex/migration.py",
+    "codex/package.py",
+    "codex/skills/",
+    "codex/README.md",
     "commands/",
     "docs/",
     "extensions/pohuy.ts",
