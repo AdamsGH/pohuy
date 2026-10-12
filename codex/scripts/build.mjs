@@ -1,4 +1,5 @@
 import { build } from 'esbuild';
+import sharp from 'sharp';
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -35,3 +36,16 @@ for (const name of packages) {
   licenses.push(`${name} ${manifest.version}\n${license}`);
 }
 await writeFile(directory + 'dist/THIRD_PARTY_LICENSES.txt', licenses.join('\n\n'));
+
+const assets = new URL('../../assets/', import.meta.url);
+const icon = await sharp(fileURLToPath(new URL('../../docs/assets/pohuy.webp', import.meta.url)))
+  .autoOrient()
+  .resize(512, 512, { fit: 'cover', position: 'centre' })
+  .png()
+  .toBuffer();
+await mkdir(assets, { recursive: true });
+await writeFile(new URL('icon.png', assets), icon);
+await writeFile(new URL('icon.svg', assets), `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <image width="512" height="512" href="data:image/png;base64,${icon.toString('base64')}"/>
+</svg>
+`);
