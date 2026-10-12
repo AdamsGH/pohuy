@@ -34,12 +34,14 @@ export function createServer(directory: string, root = ROOT) {
       workingDictionary: { schema: z.boolean(), title: 'Словарь', description: 'slovar.md: выражения для статусов, действий и оценок. Вместе с рабочим минимумом из скилла.' },
       calibrationExamples: { schema: z.boolean(), title: 'Сцены', description: 'sceny.md: примеры ответов на упавший деплой, странный баг и другие рабочие ситуации.' },
       rhymingForms: { schema: z.boolean(), title: 'Хуенитивы', description: 'huenitiv.md: рифмованные пары из исходника. Используются в ultra.' },
+      asciiDashes: { schema: z.boolean(), title: 'Короткие тире', description: 'Необязательно: заменять длинное тире на дефис в тексте промпта. По умолчанию выключено.' },
       ontology: { schema: z.boolean(), title: 'Онтология', description: 'ontologia.md: авторская теория инженерного абсурда и её персонажи.' },
     },
     layout: [
       { kind: 'group', title: 'Режим Pohuy', items: [{ kind: 'property', property: 'mode' }, { kind: 'property', property: 'autoApply' }] },
       { kind: 'group', title: 'Как отвечать', items: [{ kind: 'property', property: 'answerLength' }, { kind: 'property', property: 'dryHumor' }] },
       { kind: 'group', title: 'Арсенал Pohuy', items: [{ kind: 'property', property: 'workingDictionary' }, { kind: 'property', property: 'calibrationExamples' }, { kind: 'property', property: 'rhymingForms' }, { kind: 'property', property: 'ontology' }] },
+      { kind: 'group', title: 'Дополнительно', items: [{ kind: 'property', property: 'asciiDashes' }] },
     ],
     read: () => values(readSettings(directory)),
     update: (set) => {

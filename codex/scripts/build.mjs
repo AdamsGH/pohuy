@@ -1,9 +1,9 @@
 import { build } from 'esbuild';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-const directory = fileURLToPath(new URL('./', import.meta.url));
+const directory = fileURLToPath(new URL('../', import.meta.url));
 const result = await build({
-  entryPoints: [directory + 'controller.ts', directory + 'server.ts'],
+  entryPoints: [directory + 'src/controller.ts', directory + 'src/server.ts'],
   outdir: directory + 'dist', outExtension: { '.js': '.mjs' },
   bundle: true, platform: 'node', format: 'esm', target: 'node22', metafile: true, minify: false, charset: 'utf8',
   banner: { js: 'import { createRequire as __createRequire } from "node:module"; const require = __createRequire(import.meta.url);' },
@@ -15,7 +15,7 @@ const packages = [...new Set(Object.keys(result.metafile.inputs).flatMap(input =
 }))].sort();
 const licenses = [];
 for (const name of packages) {
-  const base = new URL(`../node_modules/${name}/`, import.meta.url);
+  const base = new URL(`../../node_modules/${name}/`, import.meta.url);
   const manifest = JSON.parse(await readFile(new URL('package.json', base), 'utf8'));
   let license;
   for (const filename of ['LICENSE', 'LICENSE.md', 'LICENSE.txt', 'LICENSE-MIT', 'license', 'license.md']) {

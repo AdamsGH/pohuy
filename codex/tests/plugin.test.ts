@@ -6,8 +6,8 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { TIERS, readSettings, setTier, hook, promptTier, serverDataDirectory, dataDirectory, atomicWrite, updateSettings, styleContext, preferences } from '../core.js';
-import { migrate, removeBlocks, removeReminder } from '../migration.js';
+import { TIERS, readSettings, setTier, hook, promptTier, serverDataDirectory, dataDirectory, atomicWrite, updateSettings, styleContext, preferences } from '../src/core.js';
+import { migrate, removeBlocks, removeReminder } from '../src/migration.js';
 import { fileURLToPath } from 'node:url';
 import { unzipSync } from 'fflate';
 import { Validator } from '@cfworker/json-schema';
@@ -78,8 +78,9 @@ test('real MCP advertises native settings, validates updates, and shares mode wi
   const settings = first.structuredContent as any;
   assert.equal(settings.values.mode, 'full');
   assert.equal(settings.values.answerLength, 'Кратко');
+  assert.equal(settings.values.asciiDashes, false);
   assert.deepEqual(settings.schema.properties.mode.enum, ['Выключен', 'lite', 'full', 'ultra']);
-  assert.equal(settings.layout.length, 3);
+  assert.equal(settings.layout.length, 4);
   assert.equal(settings.layout.flatMap((g: any) => g.items).some((item: any) => item.kind === 'tool'), false);
   assert.equal(settings.layout[0].items[0].property, 'mode');
   assert.equal(existsSync(path.join(dir, 'settings.json')), false);
@@ -98,6 +99,9 @@ test('real MCP advertises native settings, validates updates, and shares mode wi
   assert.equal((changed.structuredContent as any).values.dryHumor, false);
   const detailed = await client.callTool({ name: 'pohuy.context', arguments: {} });
   assert.match((detailed.content as { text: string }[])[0].text, /Give thorough explanations/);
+  await client.callTool({ name: 'settings.update', arguments: { set: { asciiDashes: true } } });
+  const ascii = await client.callTool({ name: 'pohuy.context', arguments: {} });
+  assert.equal((ascii.content as { text: string }[])[0].text.includes('—'), false);
   const before = readFileSync(path.join(dir, 'settings.json'));
   for (const args of [{ set: {} }, { set: { mode: 'invalid' } }, { set: { path: '/tmp/other' } }, { set: { mode: 'lite' }, data_dir: '/tmp/other' }, { set: { autoApply: 'false' } }]) {
     const result = await client.callTool({ name: 'settings.update', arguments: args });
@@ -114,7 +118,7 @@ test('partial preferences persist across mode changes and filter the context wit
   const dir = temp(); t.after(() => rmSync(dir, { recursive: true, force: true }));
   const source = path.join(ROOT, 'skills/pohuy/SKILL.md'); const before = readFileSync(source);
   writeFileSync(path.join(dir, 'settings.json'), '{"version":1,"tier":"full","retained":42}');
-  assert.deepEqual(preferences(readSettings(dir)), { autoApply: true, answerLength: 'short', dryHumor: true, workingDictionary: true, calibrationExamples: true, rhymingForms: true, ontology: false });
+  assert.deepEqual(preferences(readSettings(dir)), { autoApply: true, answerLength: 'short', dryHumor: true, workingDictionary: true, calibrationExamples: true, rhymingForms: true, ontology: false, asciiDashes: false });
   updateSettings(dir, { answerLength: 'detailed', dryHumor: false, workingDictionary: false, calibrationExamples: false, rhymingForms: false }, ROOT);
   setTier(dir, 'ultra');
   const settings = readSettings(dir);
@@ -212,7 +216,7 @@ test('migration restores the first file if the second write fails', t => {
 test('packages contain runnable bundles and isolated onboarding; archives omit marketplace and refuse overwrite', t => {
   const dir = temp(); t.after(() => rmSync(dir, { recursive: true, force: true }));
   const destination = path.join(dir, 'plugin'); const archive = path.join(dir, 'plugin.zip');
-  const command = [path.join(ROOT, 'codex/package.mjs'), destination, '--archive', archive];
+  const command = [path.join(ROOT, 'codex/scripts/package.mjs'), destination, '--archive', archive];
   const result = spawnSync(process.execPath, command, { encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);
   const files = unzipSync(readFileSync(archive));
@@ -241,7 +245,7 @@ test('portable manifests satisfy the published Agent Plugins schemas', () => {
 test('Codex uses the Pi compiler and follows source edits without a second style document', async t => {
   const { loadStyleSource, buildStylePrompt } = await import('../../extensions/pohuy/style-source.js');
   const source = await loadStyleSource();
-  assert.ok(styleContext('full', ROOT).startsWith(buildStylePrompt({ tier: 'full' }, source)!));
+  assert.ok(styleContext('full', ROOT).startsWith(buildStylePrompt({ tier: 'full', selectedSections: source.options.filter(option => option.id !== 'huenitiv:rules').map(option => option.id) }, source)!));
   const dir = temp(); t.after(() => rmSync(dir, { recursive: true, force: true }));
   const { cpSync } = await import('node:fs');
   cpSync(path.join(ROOT, 'skills'), path.join(dir, 'skills'), { recursive: true });
@@ -249,7 +253,7 @@ test('Codex uses the Pi compiler and follows source edits without a second style
   const edited = readFileSync(skill, 'utf8').replace('Идиомы везде, где их сказал бы живой человек. Default.', 'SOURCE_LEVEL_POLICY. Default.');
   writeFileSync(skill, edited);
   assert.match(styleContext('full', dir), /SOURCE_LEVEL_POLICY/);
-  assert.match(styleContext('full', dir, { version: 1, tier: 'full', ontology: true }), /ontologia.md/);
+  assert.match(styleContext('full', dir, { version: 1, tier: 'full', ontology: true }), /# Онтология предметной области/);
   assert.doesNotMatch(styleContext('full', dir, { version: 1, tier: 'full', ontology: false }), /ontologia.md/);
   assert.equal(readFileSync(skill, 'utf8'), edited);
 });
@@ -257,7 +261,7 @@ test('Codex uses the Pi compiler and follows source edits without a second style
 test('packaged style retains original source bytes and runs independently of the checkout', t => {
   const dir = temp(); t.after(() => rmSync(dir, { recursive: true, force: true }));
   const destination = path.join(dir, 'plugin');
-  const result = spawnSync(process.execPath, [path.join(ROOT, 'codex/package.mjs'), destination], { encoding: 'utf8' });
+  const result = spawnSync(process.execPath, [path.join(ROOT, 'codex/scripts/package.mjs'), destination], { encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);
   assert.deepEqual(readFileSync(path.join(destination, 'codex/style/SKILL.md')), readFileSync(path.join(ROOT, 'skills/pohuy/SKILL.md')));
   assert.equal(existsSync(path.join(destination, 'codex/AGENTS-pohuy.md')), false);
@@ -271,9 +275,51 @@ test('legacy installer uses the original skill and preserves surrounding instruc
   writeFileSync(path.join(dir, 'AGENTS.md'), 'Keep local instructions.\n');
   const result = spawnSync('bash', [path.join(ROOT, 'install-codex.sh')], { env: { ...process.env, CODEX_DIR: dir }, encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);
-  assert.deepEqual(readFileSync(path.join(dir, 'pohuy/SKILL.md')), readFileSync(path.join(ROOT, 'skills/pohuy/SKILL.md')));
   const instructions = readFileSync(path.join(dir, 'AGENTS.md'), 'utf8');
   assert.match(instructions, /^Keep local instructions\./);
-  assert.match(instructions, /pohuy\/SKILL.md/);
-  assert.doesNotMatch(instructions, /Словарь \(рабочий минимум\)/);
+  assert.match(instructions, /Словарь \(рабочий минимум\)/);
+  assert.doesNotMatch(instructions, /прочитай|pohuy\/SKILL.md/);
+});
+
+test('optional dash formatting changes prose only and leaves Markdown literals intact', async () => {
+  const { formatPromptText } = await import('../src/prompt-text.js');
+  const markdown = [
+    'Text — explanation.', '`literal — value` and text — explanation.',
+    '```ts', 'const value = "—";', '```', '> ~~~~', '> quoted — code', '> ~~~~',
+    '    indented — code', '[link](https://example.test/—) and text — explanation.',
+    '``multiline —', 'literal`` and text — explanation.',
+  ].join('\n');
+  assert.equal(formatPromptText(markdown), markdown);
+  const formatted = formatPromptText(markdown, true);
+  assert.match(formatted, /Text - explanation/);
+  assert.match(formatted, /`literal — value` and text - explanation/);
+  assert.match(formatted, /const value = "—"/);
+  assert.match(formatted, /> quoted — code/);
+  assert.match(formatted, /indented — code/);
+  assert.match(formatted, /example.test\/—\) and text - explanation/);
+  assert.match(formatted, /multiline —\nliteral`` and text - explanation/);
+  assert.equal(formatPromptText(formatted, true), formatted);
+});
+
+test('selected references are composed inline; dash preference rehydrates hooks without editing sources', t => {
+  const dir = temp(); t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const sourceFile = path.join(ROOT, 'skills/pohuy/references/ontologia.md');
+  const original = readFileSync(sourceFile);
+  const settings = { version: 1 as const, tier: 'full' as const, ontology: true };
+  const baseline = styleContext('full', ROOT, settings);
+  assert.match(baseline, /# Онтология предметной области/);
+  assert.match(baseline, /### Легаси-археология/);
+  assert.doesNotMatch(baseline, /прочитай выбранные источники/);
+  assert.equal(baseline.includes('—'), true);
+  const changed = styleContext('full', ROOT, { ...settings, asciiDashes: true });
+  assert.equal(changed.includes('—'), false);
+  assert.deepEqual(readFileSync(sourceFile), original);
+  const event = { hook_event_name: 'UserPromptSubmit', session_id: 'dashes', prompt: 'Continue.' };
+  hook('UserPromptSubmit', event, dir, ROOT);
+  updateSettings(dir, { asciiDashes: true }, ROOT);
+  const refreshed = hook('UserPromptSubmit', event, dir, ROOT).hookSpecificOutput.additionalContext;
+  assert.match(refreshed, /Стиль ответов: Pohuy/);
+  assert.equal(refreshed.includes('—'), false);
+  assert.equal(hook('UserPromptSubmit', event, dir, ROOT).hookSpecificOutput.additionalContext.includes('—'), false);
+  assert.equal(readSettings(dir).asciiDashes, true);
 });

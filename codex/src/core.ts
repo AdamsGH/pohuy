@@ -3,10 +3,11 @@ import { readFileSync, existsSync, mkdirSync, openSync, writeFileSync, fsyncSync
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { parseStyleSource, buildStylePrompt, selectedSectionIds, type StoredSettings } from '../extensions/pohuy/style-source.js';
+import { formatPromptText } from './prompt-text.js';
+import { parseStyleSource, buildStylePrompt, type StoredSettings } from '../../extensions/pohuy/style-source.js';
 
 const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
-export const ROOT = path.resolve(moduleDirectory, path.basename(moduleDirectory) === 'dist' ? '../..' : '..');
+export const ROOT = path.resolve(moduleDirectory, '../..');
 export const TIERS = ['off', 'lite', 'full', 'ultra'] as const;
 export type Tier = typeof TIERS[number];
 export type Settings = { version: 1; tier: Tier; [key: string]: unknown };
@@ -18,10 +19,11 @@ export type Preferences = {
   calibrationExamples: boolean;
   rhymingForms: boolean;
   ontology: boolean;
+  asciiDashes: boolean;
 };
 export const DEFAULT_PREFERENCES: Preferences = {
   autoApply: true, answerLength: 'short', dryHumor: true,
-  workingDictionary: true, calibrationExamples: true, rhymingForms: true, ontology: false,
+  workingDictionary: true, calibrationExamples: true, rhymingForms: true, ontology: false, asciiDashes: false,
 };
 export function preferences(settings: Settings): Preferences {
   const result = { ...DEFAULT_PREFERENCES };
@@ -142,17 +144,15 @@ export function styleContext(tier: Tier, root = ROOT, settings: Settings = { ver
   const source = loadSource(root);
   const p = preferences(settings);
   const profile: StoredSettings = { tier };
-  profile.selectedSections = selectedSectionIds(profile, source).filter(id =>
-    (p.workingDictionary || !id.startsWith('skill:Словарь') && !id.startsWith('slovar:')) &&
-    (p.calibrationExamples || !id.startsWith('sceny:')) &&
-    (p.rhymingForms || id !== 'huenitiv:rules'));
-  const references = path.join(root, 'skills/pohuy/references');
-  const sources = [p.workingDictionary ? 'slovar.md' : '', p.calibrationExamples ? 'sceny.md' : '',
-    p.ontology ? 'ontologia.md' : '', p.rhymingForms && tier === 'ultra' ? 'huenitiv.md' : ''].filter(Boolean);
-  const sourceContext = sources.length
-    ? `При необходимости расширить словарь или примеры прочитай выбранные источники в ${references}: ${sources.join(', ')}. Остальные источники отключены.`
-    : 'Дополнительные источники отключены.';
-  return [buildStylePrompt(profile, source), sourceContext, modeContext(tier, root), preferenceContext({ ...settings, tier })].join('\n\n');
+  profile.selectedSections = source.options.filter(option =>
+    (option.section === 'dictionary' && p.workingDictionary) ||
+    (option.section === 'scenes' && p.calibrationExamples) ||
+    (option.id.startsWith('skill:Словарь') && p.workingDictionary) ||
+    (option.id === 'huenitiv:rules' && p.rhymingForms && tier === 'ultra')
+  ).map(option => option.id);
+  const ontology = p.ontology ? readFileSync(path.join(root, 'skills/pohuy/references/ontologia.md'), 'utf8') : '';
+  const context = [buildStylePrompt(profile, source), ontology, modeContext(tier, root), preferenceContext({ ...settings, tier })].filter(Boolean).join('\n\n');
+  return formatPromptText(context, p.asciiDashes);
 }
 
 export function promptTier(prompt: string): Tier | undefined {
@@ -180,5 +180,5 @@ export function hook(event: string, payload: Record<string, unknown>, directory:
     mkdirSync(path.dirname(sessionFile), { recursive: true, mode: 0o700 });
     atomicWrite(sessionFile, JSON.stringify(fingerprint));
   }
-  return { hookSpecificOutput: { hookEventName: event, additionalContext: context } };
+  return { hookSpecificOutput: { hookEventName: event, additionalContext: formatPromptText(context, p.asciiDashes) } };
 }

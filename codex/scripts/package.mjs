@@ -3,11 +3,11 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { zipSync } from 'fflate';
 
-const root = fileURLToPath(new URL('../', import.meta.url));
+const root = fileURLToPath(new URL('../../', import.meta.url));
 export const FILES = [
   'plugin.json', 'mcp.json', '.codex-plugin/plugin.json', '.agents/plugins/marketplace.json',
   'assets/icon.svg', 'assets/icon.png', 'docs/assets/pohuy.webp', 'LICENSE',
-  'codex/hooks.json', 'codex/mcp.json', 'codex/README.md',
+  'codex/hooks/hooks.json', 'codex/mcp.json', 'codex/README.md',
   'codex/dist/controller.mjs', 'codex/dist/server.mjs', 'codex/dist/THIRD_PARTY_LICENSES.txt',
   'codex/skills/setup/SKILL.md', 'codex/skills/setup/agents/openai.yaml',
   'codex/skills/pohuy/SKILL.md', 'codex/skills/pohuy/agents/openai.yaml',
@@ -61,7 +61,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const args = process.argv.slice(2);
   const destination = args[0];
   const archiveIndex = args.indexOf('--archive');
-  if (!destination || (archiveIndex >= 0 && !args[archiveIndex + 1])) throw new Error('Использование: node codex/package.mjs <новый каталог> [--archive <новый ZIP>] [--compat]');
+  if (!destination || (archiveIndex >= 0 && !args[archiveIndex + 1])) throw new Error('Использование: node codex/scripts/package.mjs <новый каталог> [--archive <новый ZIP>] [--compat]');
   packagePlugin(path.resolve(destination), archiveIndex >= 0 ? path.resolve(args[archiveIndex + 1]) : undefined, args.includes('--compat'));
   console.log(`Пакет готов: ${path.resolve(destination)}`);
 }

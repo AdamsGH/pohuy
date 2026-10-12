@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "pohuy",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Русский инженерный разговор: по делу, с характером, без церемоний.",
   "author": {
     "name": "Serge Shima",
@@ -11,7 +11,7 @@
   "license": "MIT",
   "extensions": {
     "com.openai": {
-      "hooks": "./codex/hooks.json",
+      "hooks": "./codex/hooks/hooks.json",
       "onboardingSkill": "./skills/setup/SKILL.md",
       "interface": {
         "displayName": "Pohuy",
