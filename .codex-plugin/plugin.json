@@ -1,6 +1,6 @@
 {
   "name": "pohuy",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Русский инженерный разговор: по делу, с характером, без церемоний.",
   "author": {
     "name": "Serge Shima",
@@ -10,7 +10,7 @@
   "license": "MIT",
   "skills": "./codex/skills/",
   "mcpServers": "./codex/mcp.json",
-  "hooks": "./codex/hooks.json",
+  "hooks": "./codex/hooks/hooks.json",
   "extensions": {
     "com.openai": {
       "onboardingSkill": "./codex/skills/setup/SKILL.md"

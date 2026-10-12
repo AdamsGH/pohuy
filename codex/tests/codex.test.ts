@@ -49,7 +49,7 @@ test('Codex discovers compatibility hooks and onboarding from a clean installed 
   const env: NodeJS.ProcessEnv = { ...process.env, CODEX_HOME: home };
   delete env.PLUGIN_DATA; delete env.POHUY_DATA_DIR;
   for (const [command, args] of [
-    [process.execPath, [path.join(ROOT, 'codex/package.mjs'), market, '--compat']],
+    [process.execPath, [path.join(ROOT, 'codex/scripts/package.mjs'), market, '--compat']],
     ['codex', ['plugin', 'marketplace', 'add', market]],
     ['codex', ['plugin', 'add', 'pohuy@pohuy', '--json']],
   ] as const) {
@@ -75,7 +75,7 @@ test('Codex discovers compatibility hooks and onboarding from a clean installed 
   assert.equal(servers.data.find((s: any) => s.name === 'pohuy-settings')?.runtimeStatus, 'connected', JSON.stringify(servers));
   const resultRead = await app.call('mcpServer/tool/call', { threadId: thread, server: 'pohuy-settings', tool: 'settings.read', arguments: {} });
   assert.equal(resultRead.structuredContent.values.mode, 'full');
-  assert.equal(resultRead.structuredContent.layout.length, 3);
+  assert.equal(resultRead.structuredContent.layout.length, 4);
   const update = await app.call('mcpServer/tool/call', { threadId: thread, server: 'pohuy-settings', tool: 'settings.update', arguments: { set: { mode: 'lite' } } });
   assert.equal(update.structuredContent.values.mode, 'lite');
 });

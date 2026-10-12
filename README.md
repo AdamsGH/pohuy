@@ -297,13 +297,15 @@ curl -fsSL https://raw.githubusercontent.com/smixs/pohuy/main/install.sh | bash
 между сессиями и миграция со старого установщика. Установка, доверие хукам
 и проверки описаны в [codex/README.md](./codex/README.md).
 
-Для установки через глобальный `AGENTS.md` остаётся прежний скрипт:
+Для установки через глобальный `AGENTS.md` остаётся прежний скрипт. Он требует
+Node.js 22.19 или новее и Python 3 для записи старой конфигурации:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/smixs/pohuy/main/install-codex.sh | bash
 ```
 
-Скрипт дописывает секцию Pohuy в `~/.codex/AGENTS.md` (глобальные инструкции,
+Скрипт собирает промпт из исходного скилла и дописывает его в
+`~/.codex/AGENTS.md` (глобальные инструкции,
 грузятся каждую сессию; твоё содержимое файла не трогается — секция живёт между
 маркерами), кладёт словарь в `~/.codex/pohuy/references/` и регистрирует
 `UserPromptSubmit`-хук в `~/.codex/hooks.json` — то же ежеходовое подкрепление,
