@@ -1,4 +1,4 @@
 interface:
-  display_name: "Настройка Pohuy"
-  short_description: "Выбор и сохранение режима общения"
-  default_prompt: "Используй $pohuy, чтобы открыть выбор режима общения и показать текущую настройку."
+  display_name: "Режим Pohuy"
+  short_description: "Проверить уровень или сменить тон"
+  default_prompt: "Используй $pohuy, чтобы показать текущий уровень и помочь его сменить."
