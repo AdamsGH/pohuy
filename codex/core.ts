@@ -3,10 +3,38 @@ import { readFileSync, mkdirSync, openSync, writeFileSync, fsyncSync, closeSync,
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const ROOT = fileURLToPath(new URL('../../', import.meta.url));
+const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
+export const ROOT = path.resolve(moduleDirectory, path.basename(moduleDirectory) === 'dist' ? '../..' : '..');
 export const TIERS = ['off', 'lite', 'full', 'ultra'] as const;
 export type Tier = typeof TIERS[number];
 export type Settings = { version: 1; tier: Tier; [key: string]: unknown };
+export type Preferences = {
+  autoApply: boolean;
+  answerLength: 'short' | 'adaptive' | 'detailed';
+  dryHumor: boolean;
+  workingDictionary: boolean;
+  calibrationExamples: boolean;
+  rhymingForms: boolean;
+};
+export const DEFAULT_PREFERENCES: Preferences = {
+  autoApply: true, answerLength: 'short', dryHumor: true,
+  workingDictionary: true, calibrationExamples: true, rhymingForms: true,
+};
+export function preferences(settings: Settings): Preferences {
+  const result = { ...DEFAULT_PREFERENCES };
+  for (const key of Object.keys(result) as (keyof Preferences)[]) {
+    const value = settings[key];
+    if (value === undefined) continue;
+    if (key === 'answerLength') {
+      if (!['short', 'adaptive', 'detailed'].includes(value as string)) throw new Error('Некорректная настройка длины ответа.');
+      result.answerLength = value as Preferences['answerLength'];
+    } else {
+      if (typeof value !== 'boolean') throw new Error(`Некорректная настройка: ${key}.`);
+      result[key] = value;
+    }
+  }
+  return result;
+}
 export const ARTIFACT_RULE = 'Apply this style only to conversational prose. Keep authored project artifacts professional and free of profanity. Preserve the established language, style, terminology, literal values, quotations, examples, and translations of each artifact. Established Russian requires no separate request. Use English when no language convention exists. Follow explicit language and localization requests. Use neutral, literal wording for security, irreversible actions, and recovery.';
 
 export function isTier(value: unknown): value is Tier {
@@ -45,6 +73,7 @@ export function readSettings(directory: string): Settings {
       (settings as Settings).version !== 1 || !isTier((settings as Settings).tier)) {
     throw new Error('Неподдерживаемый формат настроек Pohuy. Ожидается version: 1 и допустимый tier.');
   }
+  preferences(settings as Settings);
   return settings as Settings;
 }
 
@@ -66,12 +95,19 @@ export function atomicWrite(filename: string, bytes: string | Buffer, mode = 0o6
   }
 }
 
-export function setTier(directory: string, tier: Tier): Settings {
-  if (!isTier(tier)) throw new Error('Неизвестный режим Pohuy.');
-  const settings = { ...readSettings(directory), tier };
+export function updateSettings(directory: string, patch: Partial<Preferences & { tier: Tier }>, root = ROOT): Settings {
+  const settings: Settings = { ...readSettings(directory), ...patch };
+  if (!isTier(settings.tier)) throw new Error('Неизвестный режим Pohuy.');
+  preferences(settings);
+  styleContext(settings.tier, root, settings);
   mkdirSync(directory, { recursive: true, mode: 0o700 });
   atomicWrite(path.join(directory, 'settings.json'), JSON.stringify(settings, null, 2) + '\n');
   return settings;
+}
+
+export function setTier(directory: string, tier: Tier): Settings {
+  if (!isTier(tier)) throw new Error('Неизвестный режим Pohuy.');
+  return updateSettings(directory, { tier });
 }
 
 export function modeContext(tier: Tier): string {
@@ -84,13 +120,40 @@ export function modeContext(tier: Tier): string {
   return `Pohuy mode: ${tier}. This is authoritative and supersedes earlier mode selections. ${guidance[tier]}\n${ARTIFACT_RULE}`;
 }
 
-export function styleContext(tier: Tier, root = ROOT): string {
+export function preferenceContext(settings: Settings): string {
+  const p = preferences(settings);
+  const length = {
+    short: 'Keep replies short: lead with the result and include only necessary details. Explicit requests for detail take precedence.',
+    adaptive: 'Match reply length to the task. Be concise for simple questions; explain reasoning and evidence when useful.',
+    detailed: 'Give thorough explanations with reasoning, evidence, and useful examples. Keep the structure clear and follow explicit requests for brevity.',
+  };
+  return `Pohuy response preferences: ${length[p.answerLength]} ${p.dryHumor ? 'Dry, situational irony is allowed; keep it proportionate.' : 'Use direct, literal wording without jokes or sarcasm; idiomatic engineering emphasis remains allowed.'} ${p.rhymingForms && settings.tier === 'ultra' ? 'Rhyming forms are allowed in ultra mode.' : 'Rhyming forms are disabled.'} These preferences supersede conflicting conversational examples. Professional artifact wording and serious-warning clarity remain mandatory.`;
+}
+
+function filteredStyle(markdown: string, p: Preferences): string {
+  const sections = markdown.split(/(?=^## )/m);
+  const filtered = sections.filter(section => {
+    if (section.startsWith('## Краткость') && p.answerLength !== 'short') return false;
+    if (section.startsWith('## Словарь') && !p.workingDictionary) return false;
+    if (section.startsWith('## Хуенитивы') && !p.rhymingForms) return false;
+    if (section.startsWith('## Примеры калибровки') && !p.calibrationExamples) return false;
+    return true;
+  }).join('');
+  // Replace the broad source pointer with a pointer to the enabled references only.
+  return filtered.replace(/^Полный словарь[^\n]*\nтолько если[^\n]*\n/gm, '');
+}
+
+export function styleContext(tier: Tier, root = ROOT, settings: Settings = { version: 1, tier }): string {
   if (tier === 'off') return modeContext(tier);
   const references = path.join(root, 'skills/pohuy/references');
-  const style = readFileSync(path.join(root, 'codex/AGENTS-pohuy.md'), 'utf8')
+  const p = preferences(settings);
+  const style = filteredStyle(readFileSync(path.join(root, 'codex/AGENTS-pohuy.md'), 'utf8'), p)
     .replaceAll('~/.codex/pohuy/references/', references + '/')
     .replaceAll('<!-- pohuy:start -->', '').replaceAll('<!-- pohuy:end -->', '').trim();
-  const context = `${style}\n\nBundled style references: ${references}. Read huenitiv.md only for ultra mode.\n\n${modeContext(tier)}`;
+  const sources = [p.workingDictionary ? 'slovar.md' : '', p.calibrationExamples ? 'sceny.md' : '',
+    p.rhymingForms && tier === 'ultra' ? 'huenitiv.md' : ''].filter(Boolean);
+  const sourceContext = sources.length ? `Enabled style references in ${references}: ${sources.join(', ')}. Read only when needed.` : 'No optional reference sources are enabled.';
+  const context = `${style}\n\n${sourceContext}\n\n${modeContext(tier)}\n${preferenceContext({ ...settings, tier })}`;
   if (context.length > 24000) throw new Error('Стиль превышает лимит контекста плагина.');
   return context;
 }
@@ -108,12 +171,17 @@ export function hook(event: string, payload: Record<string, unknown>, directory:
   let previous: unknown;
   try { previous = JSON.parse(readFileSync(sessionFile, 'utf8')); } catch { previous = undefined; }
   const requested = event === 'UserPromptSubmit' ? promptTier(payload.prompt as string) : undefined;
-  const tier = requested ?? readSettings(directory).tier;
-  const context = requested || event === 'SessionStart' || previous !== tier ? styleContext(tier, root) : modeContext(tier);
-  if (requested) setTier(directory, tier);
-  if (previous !== tier || event === 'SessionStart') {
+  const settings = { ...readSettings(directory), ...(requested ? { tier: requested } : {}) };
+  const tier = settings.tier;
+  const p = preferences(settings);
+  const fingerprint = createHash('sha256').update(JSON.stringify({ tier, ...p })).digest('hex');
+  let context: string;
+  if (!p.autoApply && !requested) context = modeContext('off') + '\nAutomatic Pohuy activation is disabled. Apply the saved profile only when the user invokes Pohuy explicitly in this turn.';
+  else context = requested || event === 'SessionStart' || previous !== fingerprint ? styleContext(tier, root, settings) : modeContext(tier) + '\n' + preferenceContext(settings);
+  if (requested) updateSettings(directory, { tier }, root);
+  if (previous !== fingerprint || event === 'SessionStart') {
     mkdirSync(path.dirname(sessionFile), { recursive: true, mode: 0o700 });
-    atomicWrite(sessionFile, JSON.stringify(tier));
+    atomicWrite(sessionFile, JSON.stringify(fingerprint));
   }
   return { hookSpecificOutput: { hookEventName: event, additionalContext: context } };
 }
