@@ -5,7 +5,7 @@ const directory = fileURLToPath(new URL('./', import.meta.url));
 const result = await build({
   entryPoints: [directory + 'controller.ts', directory + 'server.ts'],
   outdir: directory + 'dist', outExtension: { '.js': '.mjs' },
-  bundle: true, platform: 'node', format: 'esm', target: 'node22', metafile: true, minify: true,
+  bundle: true, platform: 'node', format: 'esm', target: 'node22', metafile: true, minify: false, charset: 'utf8',
   banner: { js: 'import { createRequire as __createRequire } from "node:module"; const require = __createRequire(import.meta.url);' },
 });
 await mkdir(directory + 'dist', { recursive: true });

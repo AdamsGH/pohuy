@@ -1,7 +1,9 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { readFileSync, mkdirSync, openSync, writeFileSync, fsyncSync, closeSync, renameSync, unlinkSync } from 'node:fs';
+import { readFileSync, existsSync, mkdirSync, openSync, writeFileSync, fsyncSync, closeSync, renameSync, unlinkSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { parseStyleSource, buildStylePrompt, selectedSectionIds, type StoredSettings } from '../extensions/pohuy/style-source.js';
 
 const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
 export const ROOT = path.resolve(moduleDirectory, path.basename(moduleDirectory) === 'dist' ? '../..' : '..');
@@ -15,10 +17,11 @@ export type Preferences = {
   workingDictionary: boolean;
   calibrationExamples: boolean;
   rhymingForms: boolean;
+  ontology: boolean;
 };
 export const DEFAULT_PREFERENCES: Preferences = {
   autoApply: true, answerLength: 'short', dryHumor: true,
-  workingDictionary: true, calibrationExamples: true, rhymingForms: true,
+  workingDictionary: true, calibrationExamples: true, rhymingForms: true, ontology: false,
 };
 export function preferences(settings: Settings): Preferences {
   const result = { ...DEFAULT_PREFERENCES };
@@ -110,14 +113,18 @@ export function setTier(directory: string, tier: Tier): Settings {
   return updateSettings(directory, { tier });
 }
 
-export function modeContext(tier: Tier): string {
-  const guidance = {
-    off: 'Use ordinary chat without Pohuy styling. This supersedes earlier style instructions.',
-    lite: 'Use occasional idiomatic Russian engineering emphasis. Keep most sentences neutral.',
-    full: 'Use regular idiomatic Russian engineering phrasing.',
-    ultra: 'Use greater idiomatic intensity, including the rhyming forms in the references.',
-  };
-  return `Pohuy mode: ${tier}. This is authoritative and supersedes earlier mode selections. ${guidance[tier]}\n${ARTIFACT_RULE}`;
+export function loadSource(root = ROOT) {
+  const packaged = path.join(root, 'codex/style/SKILL.md');
+  const skill = readFileSync(existsSync(packaged) ? packaged : path.join(root, 'skills/pohuy/SKILL.md'), 'utf8');
+  const reference = (name: string) => readFileSync(path.join(root, 'skills/pohuy/references', name + '.md'), 'utf8');
+  return parseStyleSource({ skill, dictionary: reference('slovar'), scenes: reference('sceny'), huenitiv: reference('huenitiv') });
+}
+
+export function modeContext(tier: Tier, root = ROOT): string {
+  const guidance = tier === 'off'
+    ? 'Use ordinary chat without Pohuy styling.'
+    : loadSource(root).tiers[tier].split('\n\n')[1];
+  return `Pohuy mode: ${tier}. This supersedes earlier mode selections. ${guidance}\n${ARTIFACT_RULE}`;
 }
 
 export function preferenceContext(settings: Settings): string {
@@ -130,32 +137,22 @@ export function preferenceContext(settings: Settings): string {
   return `Pohuy response preferences: ${length[p.answerLength]} ${p.dryHumor ? 'Dry, situational irony is allowed; keep it proportionate.' : 'Use direct, literal wording without jokes or sarcasm; idiomatic engineering emphasis remains allowed.'} ${p.rhymingForms && settings.tier === 'ultra' ? 'Rhyming forms are allowed in ultra mode.' : 'Rhyming forms are disabled.'} These preferences supersede conflicting conversational examples. Professional artifact wording and serious-warning clarity remain mandatory.`;
 }
 
-function filteredStyle(markdown: string, p: Preferences): string {
-  const sections = markdown.split(/(?=^## )/m);
-  const filtered = sections.filter(section => {
-    if (section.startsWith('## Краткость') && p.answerLength !== 'short') return false;
-    if (section.startsWith('## Словарь') && !p.workingDictionary) return false;
-    if (section.startsWith('## Хуенитивы') && !p.rhymingForms) return false;
-    if (section.startsWith('## Примеры калибровки') && !p.calibrationExamples) return false;
-    return true;
-  }).join('');
-  // Replace the broad source pointer with a pointer to the enabled references only.
-  return filtered.replace(/^Полный словарь[^\n]*\nтолько если[^\n]*\n/gm, '');
-}
-
 export function styleContext(tier: Tier, root = ROOT, settings: Settings = { version: 1, tier }): string {
-  if (tier === 'off') return modeContext(tier);
-  const references = path.join(root, 'skills/pohuy/references');
+  if (tier === 'off') return modeContext(tier, root);
+  const source = loadSource(root);
   const p = preferences(settings);
-  const style = filteredStyle(readFileSync(path.join(root, 'codex/AGENTS-pohuy.md'), 'utf8'), p)
-    .replaceAll('~/.codex/pohuy/references/', references + '/')
-    .replaceAll('<!-- pohuy:start -->', '').replaceAll('<!-- pohuy:end -->', '').trim();
+  const profile: StoredSettings = { tier };
+  profile.selectedSections = selectedSectionIds(profile, source).filter(id =>
+    (p.workingDictionary || !id.startsWith('skill:Словарь') && !id.startsWith('slovar:')) &&
+    (p.calibrationExamples || !id.startsWith('sceny:')) &&
+    (p.rhymingForms || id !== 'huenitiv:rules'));
+  const references = path.join(root, 'skills/pohuy/references');
   const sources = [p.workingDictionary ? 'slovar.md' : '', p.calibrationExamples ? 'sceny.md' : '',
-    p.rhymingForms && tier === 'ultra' ? 'huenitiv.md' : ''].filter(Boolean);
-  const sourceContext = sources.length ? `Enabled style references in ${references}: ${sources.join(', ')}. Read only when needed.` : 'No optional reference sources are enabled.';
-  const context = `${style}\n\n${sourceContext}\n\n${modeContext(tier)}\n${preferenceContext({ ...settings, tier })}`;
-  if (context.length > 24000) throw new Error('Стиль превышает лимит контекста плагина.');
-  return context;
+    p.ontology ? 'ontologia.md' : '', p.rhymingForms && tier === 'ultra' ? 'huenitiv.md' : ''].filter(Boolean);
+  const sourceContext = sources.length
+    ? `При необходимости расширить словарь или примеры прочитай выбранные источники в ${references}: ${sources.join(', ')}. Остальные источники отключены.`
+    : 'Дополнительные источники отключены.';
+  return [buildStylePrompt(profile, source), sourceContext, modeContext(tier, root), preferenceContext({ ...settings, tier })].join('\n\n');
 }
 
 export function promptTier(prompt: string): Tier | undefined {
@@ -177,7 +174,7 @@ export function hook(event: string, payload: Record<string, unknown>, directory:
   const fingerprint = createHash('sha256').update(JSON.stringify({ tier, ...p })).digest('hex');
   let context: string;
   if (!p.autoApply && !requested) context = modeContext('off') + '\nAutomatic Pohuy activation is disabled. Apply the saved profile only when the user invokes Pohuy explicitly in this turn.';
-  else context = requested || event === 'SessionStart' || previous !== fingerprint ? styleContext(tier, root, settings) : modeContext(tier) + '\n' + preferenceContext(settings);
+  else context = requested || event === 'SessionStart' || previous !== fingerprint ? styleContext(tier, root, settings) : modeContext(tier, root) + '\n' + preferenceContext(settings);
   if (requested) updateSettings(directory, { tier }, root);
   if (previous !== fingerprint || event === 'SessionStart') {
     mkdirSync(path.dirname(sessionFile), { recursive: true, mode: 0o700 });

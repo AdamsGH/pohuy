@@ -7,7 +7,7 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 export const FILES = [
   'plugin.json', 'mcp.json', '.codex-plugin/plugin.json', '.agents/plugins/marketplace.json',
   'assets/icon.svg', 'assets/icon.png', 'docs/assets/pohuy.webp', 'LICENSE',
-  'codex/AGENTS-pohuy.md', 'codex/hooks.json', 'codex/mcp.json', 'codex/README.md',
+  'codex/hooks.json', 'codex/mcp.json', 'codex/README.md',
   'codex/dist/controller.mjs', 'codex/dist/server.mjs', 'codex/dist/THIRD_PARTY_LICENSES.txt',
   'codex/skills/setup/SKILL.md', 'codex/skills/setup/agents/openai.yaml',
   'codex/skills/pohuy/SKILL.md', 'codex/skills/pohuy/agents/openai.yaml',
@@ -27,6 +27,8 @@ export function packagePlugin(destination, archive, compat = false) {
       mkdirSync(path.dirname(target), { recursive: true });
       cpSync(path.join(root, file), target);
     }
+    mkdirSync(path.join(destination, 'codex/style'), { recursive: true });
+    cpSync(path.join(root, 'skills/pohuy/SKILL.md'), path.join(destination, 'codex/style/SKILL.md'));
     if (compat) {
       cpSync(path.join(destination, 'codex/mcp.json'), path.join(destination, '.mcp.json'));
       const overlayPath = path.join(destination, '.codex-plugin/plugin.json');
@@ -49,6 +51,7 @@ export function packagePlugin(destination, archive, compat = false) {
         const relative = `skills/${skill}/${name}`;
         files['pohuy/' + relative] = readFileSync(path.join(destination, relative));
       }
+      files['pohuy/codex/style/SKILL.md'] = readFileSync(path.join(destination, 'codex/style/SKILL.md'));
       if (compat) files['pohuy/.mcp.json'] = readFileSync(path.join(destination, '.mcp.json'));
       writeFileSync(archive, zipSync(files), { flag: 'wx' });
     }

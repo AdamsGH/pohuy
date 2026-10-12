@@ -7,7 +7,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { ROOT, readSettings, updateSettings, preferences, serverDataDirectory, styleContext, type Settings, type Tier, type Preferences } from './core.js';
 
-const MODES = { 'Выключен': 'off', 'Лёгкий': 'lite', 'Обычный': 'full', 'Интенсивный': 'ultra' } as const;
+const MODES = { 'Выключен': 'off', 'lite': 'lite', 'full': 'full', 'ultra': 'ultra' } as const;
 const LENGTHS = { 'Кратко': 'short', 'По задаче': 'adaptive', 'Подробно': 'detailed' } as const;
 function values(settings: Settings) {
   const p = preferences(settings);
@@ -24,21 +24,22 @@ export function createServer(directory: string, root = ROOT) {
   extensions.settings.register({
     fields: {
       mode: {
-        schema: z.enum(['Выключен', 'Лёгкий', 'Обычный', 'Интенсивный']),
-        title: 'Интенсивность',
-        description: 'От обычного общения до насыщенной инженерной лексики.',
+        schema: z.enum(['Выключен', 'lite', 'full', 'ultra']),
+        title: 'Уровень',
+        description: 'Уровни из исходного скилла: lite, full и ultra. full включён по умолчанию.',
       },
-      autoApply: { schema: z.boolean(), title: 'Включать автоматически', description: 'Применять во всех чатах на этом хосте. При отключении вызывай Pohuy вручную.' },
-      answerLength: { schema: z.enum(['Кратко', 'По задаче', 'Подробно']), title: 'Длина ответа', description: 'Явная просьба о подробности или краткости имеет приоритет.' },
-      dryHumor: { schema: z.boolean(), title: 'Сухая ирония', description: 'Ситуативные шутки и сарказм в обычном разговоре.' },
-      workingDictionary: { schema: z.boolean(), title: 'Рабочий словарь', description: 'Базовая лексика и доступ к расширенному словарю.' },
-      calibrationExamples: { schema: z.boolean(), title: 'Примеры калибровки', description: 'Эталонные ответы и сцены для настройки тона.' },
-      rhymingForms: { schema: z.boolean(), title: 'Рифмованные формы', description: 'Дополнительные формы только в интенсивном режиме.' },
+      autoApply: { schema: z.boolean(), title: 'Pohuy с начала чата', description: 'Включено: стиль работает сразу. Выключено: применяй его к отдельному ответу командой /pohuy full.' },
+      answerLength: { schema: z.enum(['Кратко', 'По задаче', 'Подробно']), title: 'Сколько подробностей', description: 'Кратко: сразу к делу. По задаче: сколько нужно для решения. Подробно: с объяснениями и примерами.' },
+      dryHumor: { schema: z.boolean(), title: 'Шутки по делу', description: 'Можно подшутить над багом или ситуацией. Выключи, если сейчас нужен только разбор.' },
+      workingDictionary: { schema: z.boolean(), title: 'Словарь', description: 'slovar.md: выражения для статусов, действий и оценок. Вместе с рабочим минимумом из скилла.' },
+      calibrationExamples: { schema: z.boolean(), title: 'Сцены', description: 'sceny.md: примеры ответов на упавший деплой, странный баг и другие рабочие ситуации.' },
+      rhymingForms: { schema: z.boolean(), title: 'Хуенитивы', description: 'huenitiv.md: рифмованные пары из исходника. Используются в ultra.' },
+      ontology: { schema: z.boolean(), title: 'Онтология', description: 'ontologia.md: авторская теория инженерного абсурда и её персонажи.' },
     },
     layout: [
-      { kind: 'group', title: 'Общение', items: [{ kind: 'property', property: 'mode' }, { kind: 'property', property: 'autoApply' }] },
-      { kind: 'group', title: 'Ответы', items: [{ kind: 'property', property: 'answerLength' }, { kind: 'property', property: 'dryHumor' }] },
-      { kind: 'group', title: 'Справочники', items: [{ kind: 'property', property: 'workingDictionary' }, { kind: 'property', property: 'calibrationExamples' }, { kind: 'property', property: 'rhymingForms' }] },
+      { kind: 'group', title: 'Режим Pohuy', items: [{ kind: 'property', property: 'mode' }, { kind: 'property', property: 'autoApply' }] },
+      { kind: 'group', title: 'Как отвечать', items: [{ kind: 'property', property: 'answerLength' }, { kind: 'property', property: 'dryHumor' }] },
+      { kind: 'group', title: 'Арсенал Pohuy', items: [{ kind: 'property', property: 'workingDictionary' }, { kind: 'property', property: 'calibrationExamples' }, { kind: 'property', property: 'rhymingForms' }, { kind: 'property', property: 'ontology' }] },
     ],
     read: () => values(readSettings(directory)),
     update: (set) => {

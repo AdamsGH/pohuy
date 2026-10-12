@@ -1,4 +1,4 @@
 interface:
-  display_name: "Настройка Pohuy"
-  short_description: "Первоначальный выбор режима общения"
-  default_prompt: "Используй $setup, чтобы выбрать режим общения Pohuy."
+  display_name: "Знакомство с Pohuy"
+  short_description: "Выбрать уровень и настроить разговор под себя"
+  default_prompt: "Используй $setup, чтобы настроить Pohuy под меня."

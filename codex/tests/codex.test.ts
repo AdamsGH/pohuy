@@ -74,8 +74,8 @@ test('Codex discovers compatibility hooks and onboarding from a clean installed 
   }
   assert.equal(servers.data.find((s: any) => s.name === 'pohuy-settings')?.runtimeStatus, 'connected', JSON.stringify(servers));
   const resultRead = await app.call('mcpServer/tool/call', { threadId: thread, server: 'pohuy-settings', tool: 'settings.read', arguments: {} });
-  assert.equal(resultRead.structuredContent.values.mode, 'Обычный');
+  assert.equal(resultRead.structuredContent.values.mode, 'full');
   assert.equal(resultRead.structuredContent.layout.length, 3);
-  const update = await app.call('mcpServer/tool/call', { threadId: thread, server: 'pohuy-settings', tool: 'settings.update', arguments: { set: { mode: 'Лёгкий' } } });
-  assert.equal(update.structuredContent.values.mode, 'Лёгкий');
+  const update = await app.call('mcpServer/tool/call', { threadId: thread, server: 'pohuy-settings', tool: 'settings.update', arguments: { set: { mode: 'lite' } } });
+  assert.equal(update.structuredContent.values.mode, 'lite');
 });

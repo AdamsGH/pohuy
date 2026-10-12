@@ -29,7 +29,7 @@ test('settings preserve old format and unknown values; corrupt data is never ove
 test('hook restores changes between sessions and handles compaction; task data cannot change settings', t => {
   const dir = temp(); t.after(() => rmSync(dir, { recursive: true, force: true }));
   const start = { hook_event_name: 'SessionStart', session_id: '../untrusted', source: 'compact' };
-  assert.match(hook('SessionStart', start, dir, ROOT).hookSpecificOutput.additionalContext, /# Pohuy Style/);
+  assert.match(hook('SessionStart', start, dir, ROOT).hookSpecificOutput.additionalContext, /Стиль ответов: Pohuy/);
   for (const tier of TIERS) {
     setTier(dir, tier);
     const payload = { hook_event_name: 'UserPromptSubmit', session_id: '../untrusted', prompt: 'Continue the task.' };
@@ -76,15 +76,15 @@ test('real MCP advertises native settings, validates updates, and shares mode wi
   assert.ok(tools.find(t => t.name === 'settings.read')?.outputSchema);
   const first = await client.callTool({ name: 'settings.read', arguments: {} });
   const settings = first.structuredContent as any;
-  assert.equal(settings.values.mode, 'Обычный');
+  assert.equal(settings.values.mode, 'full');
   assert.equal(settings.values.answerLength, 'Кратко');
-  assert.deepEqual(settings.schema.properties.mode.enum, ['Выключен', 'Лёгкий', 'Обычный', 'Интенсивный']);
+  assert.deepEqual(settings.schema.properties.mode.enum, ['Выключен', 'lite', 'full', 'ultra']);
   assert.equal(settings.layout.length, 3);
   assert.equal(settings.layout.flatMap((g: any) => g.items).some((item: any) => item.kind === 'tool'), false);
   assert.equal(settings.layout[0].items[0].property, 'mode');
   assert.equal(existsSync(path.join(dir, 'settings.json')), false);
   for (const tier of TIERS) {
-    const mode = { off: 'Выключен', lite: 'Лёгкий', full: 'Обычный', ultra: 'Интенсивный' }[tier];
+    const mode = { off: 'Выключен', lite: 'lite', full: 'full', ultra: 'ultra' }[tier];
     const update = await client.callTool({ name: 'settings.update', arguments: { set: { mode } } });
     assert.equal((update.structuredContent as any).values.mode, mode);
     assert.equal(readSettings(dir).tier, tier);
@@ -93,28 +93,28 @@ test('real MCP advertises native settings, validates updates, and shares mode wi
     assert.match(hook('SessionStart', { hook_event_name: 'SessionStart', session_id: 'mcp' }, dir, ROOT).hookSpecificOutput.additionalContext, new RegExp(`Pohuy mode: ${tier}`));
   }
   await client.callTool({ name: 'settings.update', arguments: { set: { answerLength: 'Подробно', dryHumor: false } } });
-  const changed = await client.callTool({ name: 'settings.update', arguments: { set: { mode: 'Лёгкий' } } });
+  const changed = await client.callTool({ name: 'settings.update', arguments: { set: { mode: 'lite' } } });
   assert.equal((changed.structuredContent as any).values.answerLength, 'Подробно');
   assert.equal((changed.structuredContent as any).values.dryHumor, false);
   const detailed = await client.callTool({ name: 'pohuy.context', arguments: {} });
   assert.match((detailed.content as { text: string }[])[0].text, /Give thorough explanations/);
   const before = readFileSync(path.join(dir, 'settings.json'));
-  for (const args of [{ set: {} }, { set: { mode: 'invalid' } }, { set: { path: '/tmp/other' } }, { set: { mode: 'Лёгкий' }, data_dir: '/tmp/other' }, { set: { autoApply: 'false' } }]) {
+  for (const args of [{ set: {} }, { set: { mode: 'invalid' } }, { set: { path: '/tmp/other' } }, { set: { mode: 'lite' }, data_dir: '/tmp/other' }, { set: { autoApply: 'false' } }]) {
     const result = await client.callTool({ name: 'settings.update', arguments: args });
     assert.equal(result.isError, true);
     assert.deepEqual(readFileSync(path.join(dir, 'settings.json')), before);
   }
   writeFileSync(path.join(dir, 'settings.json'), '{broken');
   assert.equal((await client.callTool({ name: 'settings.read', arguments: {} })).isError, true);
-  assert.equal((await client.callTool({ name: 'settings.update', arguments: { set: { mode: 'Обычный' } } })).isError, true);
+  assert.equal((await client.callTool({ name: 'settings.update', arguments: { set: { mode: 'full' } } })).isError, true);
   assert.equal(readFileSync(path.join(dir, 'settings.json'), 'utf8'), '{broken');
 });
 
 test('partial preferences persist across mode changes and filter the context without editing sources', t => {
   const dir = temp(); t.after(() => rmSync(dir, { recursive: true, force: true }));
-  const source = path.join(ROOT, 'codex/AGENTS-pohuy.md'); const before = readFileSync(source);
+  const source = path.join(ROOT, 'skills/pohuy/SKILL.md'); const before = readFileSync(source);
   writeFileSync(path.join(dir, 'settings.json'), '{"version":1,"tier":"full","retained":42}');
-  assert.deepEqual(preferences(readSettings(dir)), { autoApply: true, answerLength: 'short', dryHumor: true, workingDictionary: true, calibrationExamples: true, rhymingForms: true });
+  assert.deepEqual(preferences(readSettings(dir)), { autoApply: true, answerLength: 'short', dryHumor: true, workingDictionary: true, calibrationExamples: true, rhymingForms: true, ontology: false });
   updateSettings(dir, { answerLength: 'detailed', dryHumor: false, workingDictionary: false, calibrationExamples: false, rhymingForms: false }, ROOT);
   setTier(dir, 'ultra');
   const settings = readSettings(dir);
@@ -125,7 +125,7 @@ test('partial preferences persist across mode changes and filter the context wit
   assert.match(context, /without jokes or sarcasm/);
   assert.match(context, /Rhyming forms are disabled/);
   for (const heading of ['## Краткость', '## Словарь', '## Хуенитивы', '## Примеры калибровки']) assert.equal(context.includes(heading), false);
-  assert.match(context, /## Auto-Clarity/);
+  assert.match(context, /## Ясность в критических ситуациях/);
   assert.match(context, /professional and free of profanity/);
   assert.deepEqual(readFileSync(source), before);
 });
@@ -135,10 +135,10 @@ test('changing preferences without changing intensity rehydrates the next hook',
   const start = { hook_event_name: 'SessionStart', session_id: 'preferences' };
   hook('SessionStart', start, dir, ROOT);
   const prompt = { hook_event_name: 'UserPromptSubmit', session_id: 'preferences', prompt: 'Continue the task.' };
-  assert.equal(hook('UserPromptSubmit', prompt, dir, ROOT).hookSpecificOutput.additionalContext.includes('# Pohuy Style Active'), false);
+  assert.equal(hook('UserPromptSubmit', prompt, dir, ROOT).hookSpecificOutput.additionalContext.includes('Стиль ответов: Pohuy'), false);
   updateSettings(dir, { answerLength: 'adaptive' }, ROOT);
   const refreshed = hook('UserPromptSubmit', prompt, dir, ROOT).hookSpecificOutput.additionalContext;
-  assert.match(refreshed, /# Pohuy Style Active/);
+  assert.match(refreshed, /Стиль ответов: Pohuy/);
   assert.match(refreshed, /Match reply length to the task/);
   assert.equal(readSettings(dir).tier, 'full');
 });
@@ -236,4 +236,44 @@ test('portable manifests satisfy the published Agent Plugins schemas', () => {
     const result = new Validator(schema, '2020-12').validate(JSON.parse(readFileSync(path.join(ROOT, `${name}.json`), 'utf8')));
     assert.equal(result.valid, true, JSON.stringify(result.errors));
   }
+});
+
+test('Codex uses the Pi compiler and follows source edits without a second style document', async t => {
+  const { loadStyleSource, buildStylePrompt } = await import('../../extensions/pohuy/style-source.js');
+  const source = await loadStyleSource();
+  assert.ok(styleContext('full', ROOT).startsWith(buildStylePrompt({ tier: 'full' }, source)!));
+  const dir = temp(); t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const { cpSync } = await import('node:fs');
+  cpSync(path.join(ROOT, 'skills'), path.join(dir, 'skills'), { recursive: true });
+  const skill = path.join(dir, 'skills/pohuy/SKILL.md');
+  const edited = readFileSync(skill, 'utf8').replace('Идиомы везде, где их сказал бы живой человек. Default.', 'SOURCE_LEVEL_POLICY. Default.');
+  writeFileSync(skill, edited);
+  assert.match(styleContext('full', dir), /SOURCE_LEVEL_POLICY/);
+  assert.match(styleContext('full', dir, { version: 1, tier: 'full', ontology: true }), /ontologia.md/);
+  assert.doesNotMatch(styleContext('full', dir, { version: 1, tier: 'full', ontology: false }), /ontologia.md/);
+  assert.equal(readFileSync(skill, 'utf8'), edited);
+});
+
+test('packaged style retains original source bytes and runs independently of the checkout', t => {
+  const dir = temp(); t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const destination = path.join(dir, 'plugin');
+  const result = spawnSync(process.execPath, [path.join(ROOT, 'codex/package.mjs'), destination], { encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(readFileSync(path.join(destination, 'codex/style/SKILL.md')), readFileSync(path.join(ROOT, 'skills/pohuy/SKILL.md')));
+  assert.equal(existsSync(path.join(destination, 'codex/AGENTS-pohuy.md')), false);
+  const run = spawnSync(process.execPath, [path.join(destination, 'codex/dist/controller.mjs'), '--data-dir', path.join(dir, 'data'), 'set', 'ultra'], { encoding: 'utf8' });
+  assert.equal(run.status, 0, run.stderr);
+  assert.equal(JSON.parse(readFileSync(path.join(dir, 'data/settings.json'), 'utf8')).tier, 'ultra');
+});
+
+test('legacy installer uses the original skill and preserves surrounding instructions', { skip: process.platform === 'win32' }, t => {
+  const dir = temp(); t.after(() => rmSync(dir, { recursive: true, force: true }));
+  writeFileSync(path.join(dir, 'AGENTS.md'), 'Keep local instructions.\n');
+  const result = spawnSync('bash', [path.join(ROOT, 'install-codex.sh')], { env: { ...process.env, CODEX_DIR: dir }, encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(readFileSync(path.join(dir, 'pohuy/SKILL.md')), readFileSync(path.join(ROOT, 'skills/pohuy/SKILL.md')));
+  const instructions = readFileSync(path.join(dir, 'AGENTS.md'), 'utf8');
+  assert.match(instructions, /^Keep local instructions\./);
+  assert.match(instructions, /pohuy\/SKILL.md/);
+  assert.doesNotMatch(instructions, /Словарь \(рабочий минимум\)/);
 });
